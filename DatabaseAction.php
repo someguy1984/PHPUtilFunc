@@ -268,7 +268,7 @@ class DatabaseAction extends Database{
     /**
      * @param int $rowCount The number of rows the last query generated
      */
-    public function setRowCount($rowCount)
+    private function setRowCount($rowCount)
     {
         $this->rowCount = $rowCount;
     }
@@ -298,3 +298,23 @@ catch (Exception $e)
 {
     echo $e->getMessage();
 }
+
+
+//Callable functions
+//
+//bind_param($query, $parameters)
+//execute()
+//bind_result_fetch()
+//
+//insert($query, $parameters)
+//delete($query, $parameters)
+//update($query, $parameters)
+//
+//query($query)
+//fetch_assoc($query)
+//
+//cleanup()
+//getRowCount()
+//
+//getDatabaseError()
+//getDatabaseErrorNo()
