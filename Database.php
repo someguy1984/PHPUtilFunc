@@ -41,3 +41,11 @@ class Database {
      */
     public function getDatabaseErrorNo(){ return $this->db->errno; }
 }
+
+
+
+    $db->setQuery("SELECT * FROM userTest");
+    $db->bind_param();
+    $db->execute();
+    print_r($db->bind_result_fetch());
+    $db->cleanup();
