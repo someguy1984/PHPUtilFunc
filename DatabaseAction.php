@@ -14,22 +14,6 @@ class DatabaseAction extends Database{
     private $stmt;
     private $rowCount;
 
-    /**
-     * @return int
-     */
-    public function getRowCount()
-    {
-        return $this->rowCount;
-    }
-
-    /**
-     * @param int $rowCount
-     */
-    public function setRowCount($rowCount)
-    {
-        $this->rowCount = $rowCount;
-    }
-
     public function __construct()
     {
         parent::connect();
@@ -37,6 +21,7 @@ class DatabaseAction extends Database{
 
     /**
      * Prepares a query for use as a prepared query
+     *
      * @throws Exception Query preparation failure information
      */
     private function prepare($query)
@@ -46,11 +31,11 @@ class DatabaseAction extends Database{
     }
 
     /**
-     * @param string $query
-     * @param array $parameters First item in the array
-     * determines the number and types of parameters
-     * for example ss for 2 strings and the next 2 items contain
-     * the data
+     * Prepares a mysqli formatted query for execution
+     *
+     * @param string $query A mysql formatted query
+     * @param array $parameters A mixed array containing fields for binding
+     * to the mysqli query
      *
      * @throws Exception Array not supplied in array format or
      * Query failed to bind
@@ -65,19 +50,75 @@ class DatabaseAction extends Database{
         if(empty($parameters)) return;
 
         $tmp = array();
+		
+		$parameters = $this->buildArray($parameters);
+		
         foreach($parameters as $key => $value) $tmp[$key] = &$parameters[$key];
 
         if(!call_user_func_array(array($this->stmt, 'bind_param'), $tmp)){
-            print_r($this->stmt);
+            //print_r($this->stmt);
+			
             throw new Exception("Parameters failed to bind.".$this->stmt->errno);
         }
     }
 
     /**
-     * Executes the mysqli prepared statement
+     * Gets the type of input and returns as a single character
+     * or false
+     *
+     * @param object|bool|float $type Any string, number, float or even object
+     * @return bool|string A character or false
+     */
+    private function sortType($type)
+	{
+		$str = gettype($type);
+		switch($str)
+		{
+			case 'double': return 'd';
+			case 'integer': return 'i';
+			
+			case 'float':
+			case 'string': return 's';
+			
+			case 'NULL':
+            case 'bool':
+			case 'object': return false;
+		}
+	}
+
+    /**
+     * Builds an array from a mixed array and sets the first entry
+     * as a single character to represent each type of item in the
+     * array
+     *
+     * @param array $arr A mixed array containing strings, bool, objects, integers etc.
+     * @return array An array containing one new entry detailing the type of items
+     * contained within the array
+     *
+     * @throws Exception If an item in the inputted array is invalid
+     */
+    private function buildArray($arr = array())
+	{
+		$char = array();
+		
+		foreach($arr as $item)
+		{
+			$x = $this->sortType($item);
+			$char[] = $x;
+			if(!$x) throw new Exception("An item in the array was not valid.");
+		}
+		
+		array_unshift($arr, implode('',$char));
+		return $arr;
+		
+	}
+
+    /**
+     * Executes a mysqli prepared statement
+     *
      * @throw Exception Query failed to execute
      */
-        public function execute()
+    public function execute()
     {
         if(!($this->stmt->execute()))
             throw new Exception("Query failed to execute ".$this->stmt->error);
@@ -85,6 +126,9 @@ class DatabaseAction extends Database{
     }
 
     /**
+     * Use after calling bind_param($query, $params) and execute()
+     * Places results from a query into an associative array
+     *
      * @return array A multidimensional array containing
      * rows and assoc fields
      */
@@ -118,6 +162,8 @@ class DatabaseAction extends Database{
     }
 
     /**
+     * Run a non prepared query
+     *
      * @param string $query A mysql formatted query
      * @return mysqli_result The result of a mysqli query
      */
@@ -128,34 +174,59 @@ class DatabaseAction extends Database{
     }
 
     /**
+     * Inserts a row into the database
+     *
      * @param string $query A mysql formatted query
-     * @return int Number of affected rows
+     * @param array $params An array of parameters for a
+     * prepared query
+     *
+     * @return int The number of affected rows by the statement
      */
-    public function insert($query)
+    public function insert($query, $params = array())
     {
-        $this->query($query);
-        return $this->getDatabase()->affected_rows;
+        return $this->runQuery($query, $params);
     }
 
     /**
+     * Deletes a row from a mysql delete statement
+     *
      * @param string $query A mysql formatted query
-     * @return int Number of affected rows
+     * @param array $params An array of parameters for a
+     * prepared query
+     *
+     * @return int The number of affected rows by the statement
      */
-    public function delete($query)
+    public function delete($query, $params = array())
     {
-        $this->query($query);
-        return $this->getDatabase()->affected_rows;
+        return $this->runQuery($query, $params);
     }
 
+    /**
+     * Updates a table from a mysql update statement
+     *
+     * @param string $query A mysql formatted query
+     * @param array $params An array of parameters for a
+     * prepared query
+     *
+     * @return int The number of affected rows by the statement
+     */
     public function update($query, $params = array())
     {
-        $this->prepare($query);
-        $this->bind_param($params);
+        return $this->runQuery($query, $params);
+    }
+
+    private function runQuery($query, $params = array())
+    {
+        $this->bind_param($query, $params);
         $this->execute();
         return $this->stmt->affected_rows;
     }
 
     /**
+     * Use with query() to return an array of data from the query
+     * submitted assuming the query has data to return else returns
+     * null
+     *
      * @param string $query A query to be executed. The query must be fully formed.
      * @return array|null An array containing associated data from a query.
      */
@@ -167,7 +238,6 @@ class DatabaseAction extends Database{
 
             while($data = $result->fetch_assoc())
                 $q[] = $data;
-            echo "x";
 
         }
         catch (Exception $e)
@@ -178,10 +248,53 @@ class DatabaseAction extends Database{
         return $q;
     }
 
+    /**
+     * Frees any stored data and closes the result
+     */
     public function cleanup()
     {
         $this->stmt->free_result();
         $this->stmt->close();
     }
 
+    /**
+     * @return int The number of rows returned
+     */
+    public function getRowCount()
+    {
+        return $this->rowCount;
+    }
+
+    /**
+     * @param int $rowCount The number of rows the last query generated
+     */
+    public function setRowCount($rowCount)
+    {
+        $this->rowCount = $rowCount;
+    }
 } 
+
+
+
+//
+// An example of use
+//
+
+require_once 'db/DatabaseAction.php';
+
+$db = new DatabaseAction();
+
+try{
+
+    echo"<pre>";
+    //$db->setQuery();
+    $db->bind_param("SELECT * FROM userTest WHERE id=?", array(1));
+    $db->execute();
+    print_r($db->bind_result_fetch());
+    $db->cleanup();
+    echo "</pre>";
+}
+catch (Exception $e)
+{
+    echo $e->getMessage();
+}
